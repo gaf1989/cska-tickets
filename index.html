@@ -111,6 +111,11 @@ tr.best td{background:var(--accent-weak)}
 </header>
 
 <div class="stack" id="viewMain">
+<section class="card" id="todayCard" hidden>
+  <div class="chead"><div><h2>Что в продаже</h2><p class="note" id="todayNote"></p></div></div>
+  <div class="kpis" id="todayKpis"></div>
+  <div class="tablewrap"><table id="todayTbl"><thead></thead><tbody></tbody></table></div>
+</section>
 <section class="filters" aria-label="Фильтры">
   <div class="fgroup"><span class="lab">Сезон</span><div class="chips" id="fSeason"></div></div>
   <div class="fgroup"><span class="lab">Категория</span><div class="chips" id="fCat"></div></div>
@@ -207,6 +212,7 @@ function buildData(raw){
       lastN:m.days.length?Math.min(...m.days.map(d=>d[0])):0,
       firstN:m.days.length?Math.max(...m.days.map(d=>d[0])):0,
       dup:m.dup, slug:'match-'+m.date+(m.dup>1?'-'+m.dup:''),
+      have:new Set(m.days.map(d=>d[0])),
       up:m.date>TODAY, q,r,tq,tr, price:tq?tr/tq:0, last3:tq?(q[0]+q[1]+q[2])/tq:0};
   });
   M.forEach(m=>{m.cq=cumOf(m.q);m.cr=cumOf(m.r)});
@@ -362,6 +368,7 @@ function render(){
     $('n2').textContent=`Среднее за день на один матч (${src.length} ${done.length?'сыгранных':''}). Синим выделены последние три дня до матча.`.replace('  ',' ');
   }
 
+  renderToday();
   renderForecast(F);
   // table
   const cols=[['label','Матч'],['date','Дата'],['cat','Категория'],['tq','Билетов'],['tr','Выручка'],['price','Ср. цена'],['last3','Посл. 3 дня']];
@@ -374,6 +381,24 @@ function render(){
     <td>${mq?`<span class="mbar" style="width:${Math.round(m.tq/mx*70)}px"></span>`:''}${ru.format(m.tq)}</td>
     <td>${!mq?`<span class="mbar" style="width:${Math.round(m.tr/mx*70)}px"></span>`:''}${money(m.tr)}</td>
     <td>${ru.format(Math.round(m.price))} ₽</td><td>${m.up?'—':Math.round(m.last3*100)+'%'}</td><td><a href="#${m.slug}">Открыть</a></td></tr>`}).join('');
+}
+function renderToday(){
+  const sale=M.filter(m=>m.date>=TODAY&&m.tq>0).sort((a,b)=>a.date.localeCompare(b.date));
+  $('todayCard').hidden=!sale.length; if(!sale.length)return;
+  const nOf=(m,d)=>Math.round((new Date(m.date)-new Date(d))/864e5);
+  const yest=dateMinus(TODAY,1); let ref=yest;
+  if(!sale.some(m=>m.have.has(nOf(m,ref)))){let best=null;sale.forEach(m=>{const d=dateMinus(m.date,m.lastN);if(!best||d>best)best=d});ref=best}
+  const val=(m,k,off)=>{const n=nOf(m,ref)+(off||0);return m.have.has(n)?m[k][n]:null};
+  let tq=0,tr=0;sale.forEach(m=>{tq+=val(m,'q')||0;tr+=val(m,'r')||0});
+  $('todayNote').textContent=ref===yest?`Продажи за вчера, ${fmtDate(ref)}, по матчам, на которые билеты ещё продаются.`:`В таблице пока нет данных за вчера (${fmtDate(yest)}). Показан последний день с данными, ${fmtDate(ref)}.`;
+  const upd=ref===yest?'вчера':'за '+fmtDate(ref);
+  $('todayKpis').innerHTML=[['Матчей в продаже',String(sale.length),'ближайший '+fmtDate(sale[0].date)],
+    ['Продано '+upd,ru.format(tq),'билетов'],['Выручка '+upd,money(tr),tq?'средняя цена '+ru.format(Math.round(tr/tq))+' ₽':'']]
+    .map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="n">${k[2]}</div></div>`).join('');
+  $('todayTbl').tHead.innerHTML='<tr><th>Матч</th><th>Дата</th><th>До матча</th><th>Продано '+upd+'</th><th>Выручка '+upd+'</th><th>Днём ранее</th><th>Всего продано</th></tr>';
+  $('todayTbl').tBodies[0].innerHTML=sale.map(m=>{const q=val(m,'q'),r=val(m,'r'),p=val(m,'q',1),left=Math.round((new Date(m.date)-new Date(TODAY))/864e5);
+    return `<tr><td><a href="#${m.slug}">${m.label}</a></td><td>${fmtDate(m.date)}</td><td>${left>0?left+' дн.':'сегодня'}</td>
+    <td><b>${q==null?'—':ru.format(q)}</b></td><td>${r==null?'—':money(r)}</td><td>${p==null?'—':ru.format(p)}</td><td>${ru.format(m.tq)} · ${money(m.tr)}</td></tr>`}).join('');
 }
 function pctl(a,p){const s=[...a].sort((x,y)=>x-y),i=(s.length-1)*p,lo=Math.floor(i),hi=Math.ceil(i);return s[lo]+(s[hi]-s[lo])*(i-lo)}
 function forecast(m){
