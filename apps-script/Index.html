@@ -1,0 +1,645 @@
+<title>Продажи ЦСКА по дням до матча</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky filter bar over a single column of KPI tiles, two chart cards, and a sortable match table.
+   Palette: cool blue-grey neutrals, one blue accent; categorical series colors come from the validated dataviz palette. */
+:root{
+  --bg:#f2f4f8; --surface:#ffffff; --ink:#11161f; --ink2:#465266; --muted:#7a8698;
+  --line:#dfe4ec; --grid:#e8ecf2; --accent:#1d4f9f; --accent-weak:#e3ecfa; --on-accent:#ffffff;
+  --faint:#b5bfce; --warn:#a15c00; --good:#17794a; --bad:#bd3a2c;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300;
+  --f-display:'Oswald','Arial Narrow',sans-serif; --f-body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e131a; --surface:#161d27; --ink:#eef1f6; --ink2:#b4bfce; --muted:#8795a8;
+  --line:#263040; --grid:#202a37; --accent:#6ba4f2; --accent-weak:#1c2b44; --on-accent:#0e131a;
+  --faint:#566377; --warn:#e0a24a; --good:#4cc38a; --bad:#f08577;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e131a; --surface:#161d27; --ink:#eef1f6; --ink2:#b4bfce; --muted:#8795a8;
+  --line:#263040; --grid:#202a37; --accent:#6ba4f2; --accent-weak:#1c2b44; --on-accent:#0e131a;
+  --faint:#566377; --warn:#e0a24a; --good:#4cc38a; --bad:#f08577;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--f-body);padding-block:0 40px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{padding-top:20px;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline;justify-content:space-between}
+h1{font:600 28px/1.1 var(--f-display);letter-spacing:.01em;margin:0;text-transform:uppercase}
+.sub{color:var(--ink2);font-size:13px}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);width:100%}
+.filters{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:12px 22px;align-items:flex-end}
+.fgroup{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fgroup>label,.fgroup>span.lab{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+button,select{font:inherit;color:var(--ink)}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:5px 12px;cursor:pointer;line-height:1.2}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+select{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 8px;max-width:100%}
+.reset{border:0;background:none;color:var(--accent);cursor:pointer;padding:6px 2px;text-decoration:underline;text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.kpi .l{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kpi .v{font:600 28px/1.15 var(--f-display);margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .n{font-size:12px;color:var(--ink2)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.card h2{font:600 18px/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.02em;margin:0}
+.chead{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.note{color:var(--ink2);font-size:12.5px;margin:2px 0 0}
+.plot{position:relative;width:100%;margin-top:8px}
+.plot svg{display:block;width:100%;height:auto;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);box-shadow:0 4px 16px rgba(10,20,40,.18);border-radius:8px;padding:8px 10px;font-size:12.5px;min-width:150px;z-index:3;display:none}
+.tip b{display:block;margin-bottom:3px}
+.tip div{display:flex;justify-content:space-between;gap:14px;font-variant-numeric:tabular-nums}
+.tip i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12.5px;color:var(--ink2);align-items:center}
+.legend .it{display:inline-flex;align-items:center;gap:6px}
+.legend .sw{width:16px;height:0;border-top:2px solid}
+.legend button.x{border:0;background:none;color:var(--muted);cursor:pointer;padding:0 2px;font-size:14px;line-height:1}
+.axis text{fill:var(--muted);font-size:11px;font-family:var(--f-body)}
+.empty{padding:40px 8px;text-align:center;color:var(--ink2)}
+.tablewrap{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:500;position:sticky;top:0;background:var(--surface)}
+th button{border:0;background:none;font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit;cursor:pointer;padding:0}
+th button[data-on="1"]{color:var(--ink)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--accent-weak)}
+tr.sel{background:var(--accent-weak)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;border:1.5px solid var(--faint);vertical-align:-1px;margin-right:8px}
+.tag{font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--ink2)}
+.tag.up{border-color:var(--warn);color:var(--warn)}
+.mbar{display:inline-block;height:8px;border-radius:0 3px 3px 0;background:var(--faint);vertical-align:middle;margin-right:8px;opacity:.8}
+.cmpmsg{font-size:12.5px;color:var(--ink2)}
+.foot{font-size:12px;color:var(--muted)}
+.good{color:var(--good)}.bad{color:var(--bad)}
+details.card>summary{cursor:pointer;font:600 18px/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.02em}
+details.card[open]>summary{margin-bottom:8px}
+.sev{display:inline-block;font-size:11px;border-radius:4px;padding:1px 6px;border:1px solid var(--line);color:var(--ink2)}
+.sev.hi{border-color:var(--bad);color:var(--bad)}
+td.wrap{white-space:normal;min-width:260px;text-align:left}
+.srcbar{width:100%;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:12.5px;color:var(--ink2)}
+.srcbar .pt{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.srcbar .pt.live{background:var(--s3)}
+.srcbar button{border:1px solid var(--line);background:transparent;border-radius:6px;padding:3px 10px;cursor:pointer}
+.srcbar button:hover{border-color:var(--accent)}
+[hidden]{display:none!important}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+a{color:var(--accent);text-underline-offset:3px}
+.dnav{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding-top:16px}
+.dnav .r{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+#viewDetail h1{margin-top:2px}
+tr.fut td{color:var(--muted)}
+tr.tot td{font-weight:600;border-bottom:0}
+tr.best td{background:var(--accent-weak)}
+@media (max-width:560px){h1{font-size:23px}.filters{position:static}}
+@media (prefers-reduced-motion:no-preference){.chip,.seg button{transition:background .12s,border-color .12s}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">ПБК ЦСКА · продажа билетов</div>
+  <h1>Продажи по дням до матча</h1>
+  <div class="sub" id="asof"></div>
+  <div class="srcbar" id="src" role="status"></div>
+</header>
+
+<div class="stack" id="viewMain">
+<section class="card" id="todayCard" hidden>
+  <div class="chead"><div><h2>Что в продаже</h2><p class="note" id="todayNote"></p></div></div>
+  <div class="kpis" id="todayKpis"></div>
+  <div class="tablewrap"><table id="todayTbl"><thead></thead><tbody></tbody></table></div>
+</section>
+<section class="filters" aria-label="Фильтры">
+  <div class="fgroup"><span class="lab">Сезон</span><div class="chips" id="fSeason"></div></div>
+  <div class="fgroup"><span class="lab">Категория</span><div class="chips" id="fCat"></div></div>
+  <div class="fgroup"><label for="fStatus">Матчи</label>
+    <select id="fStatus"><option value="all">Все</option><option value="done">Сыграны</option><option value="up">Предстоящие</option></select></div>
+  <div class="fgroup"><label for="fOpp">Соперник</label><select id="fOpp"></select></div>
+  <div class="fgroup"><span class="lab">Показатель</span>
+    <div class="seg" id="fMetric"><button data-v="q" aria-pressed="true">Билеты</button><button data-v="r" aria-pressed="false">Выручка</button></div></div>
+  <div class="fgroup"><label for="fWin">Окно</label>
+    <select id="fWin"><option value="33">Все 33 дня</option><option value="14">Последние 14 дней</option><option value="7">Последние 7 дней</option><option value="3">Последние 3 дня</option></select></div>
+  <div class="fgroup"><span class="lab">Поделиться и выгрузить</span><div class="chips">
+    <button class="chip" id="shareBtn" type="button">Ссылка на этот вид</button>
+    <button class="chip dl" id="csvM" type="button">CSV: матчи</button>
+    <button class="chip dl" id="csvD" type="button">CSV: по дням</button></div></div>
+  <button class="reset" id="reset">Сбросить</button>
+</section>
+
+<section class="kpis" id="kpis" aria-label="Итоги по выбранным матчам"></section>
+
+<section class="card">
+  <div class="chead">
+    <div><h2>Как набираются продажи</h2><p class="note" id="n1"></p></div>
+    <div class="seg" id="fView"><button data-v="pct" aria-pressed="true">Доля от итога</button><button data-v="abs" aria-pressed="false">Нарастающим итогом</button></div>
+  </div>
+  <div class="plot" id="p1"><div class="tip" id="t1"></div></div>
+  <div class="legend" id="lg1"></div>
+</section>
+
+<section class="card">
+  <div class="chead"><div><h2>Продажи по дням</h2><p class="note" id="n2"></p></div></div>
+  <div class="plot" id="p2"><div class="tip" id="t2"></div></div>
+</section>
+
+<section class="card" id="fcCard">
+  <div class="chead"><div><h2>Прогноз для предстоящих матчей</h2><p class="note" id="n3"></p></div></div>
+  <div class="tablewrap"><table id="fc"><thead></thead><tbody></tbody></table></div>
+</section>
+
+<details class="card" id="chkCard">
+  <summary id="chkSum">Проверка данных</summary>
+  <p class="note" id="chkNote"></p>
+  <div class="tablewrap"><table id="chkTbl" style="min-width:560px"><thead></thead><tbody></tbody></table></div>
+</details>
+
+<section class="card">
+  <div class="chead"><div><h2>Матчи</h2><p class="note">Нажмите на строку, чтобы добавить матч в сравнение на первом графике (до 6).</p></div></div>
+  <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+</section>
+
+<p class="foot">Категории: ПО — плей-офф; ТОП — Зенит, УНИКС, Локомотив(-Кубань), Динамо; остальные — «Обычный». Эталонные кривые взяты из столбцов «Средний / ТОП / Обычный / ПО» исходной таблицы. Дни без записей считаются днями без продаж. Данные берутся из листа «Матчи по дням» Google Таблицы (диапазон A1:ZZ45); новые блоки матчей справа подхватываются автоматически, плей-офф определяется по названию («Финал», «Полуфинал») и по датам. Прогноз выручки считается по средней цене билета, уже достигнутой у матча; к матчу цена обычно растёт, поэтому оценка осторожная. «Надёжность» зависит от доли продаж, набранной на сегодня: если на сегодня обычно продаётся меньше 10% итога, прогноз не выдаётся.</p>
+</div>
+
+<div class="stack" id="viewDetail" hidden>
+  <div class="dnav"><a href="#">← Все матчи</a>
+    <span class="r"><a id="dPrev" href="#"></a><select id="dJump" aria-label="Перейти к матчу"></select><a id="dNext" href="#"></a></span></div>
+  <div><div class="eyebrow" id="dEye"></div><h1 id="dTitle"></h1><div class="sub" id="dSub"></div></div>
+  <section class="kpis" id="dKpis"></section>
+  <section class="card" id="dYoY" hidden>
+    <div class="chead"><div><h2>Тот же соперник в других сезонах</h2><p class="note" id="dYNote"></p></div></div>
+    <div class="tablewrap"><table id="dYTbl"><thead></thead><tbody></tbody></table></div>
+  </section>
+  <section class="card">
+    <div class="chead"><div><h2>Покупки по дням</h2><p class="note" id="dNote"></p></div>
+      <div class="seg" id="dMetric"><button data-v="q" aria-pressed="true">Билеты</button><button data-v="r" aria-pressed="false">Выручка</button></div></div>
+    <div class="plot" id="dPlot"><div class="tip" id="dTip"></div></div>
+  </section>
+  <section class="card">
+    <div class="chead"><div><h2>По датам</h2><p class="note">Каждая строка — один день продаж. В исходной таблице данные есть не раньше чем за 33 дня до матча.</p></div></div>
+    <div class="tablewrap"><table id="dTbl"><thead></thead><tbody></tbody></table></div>
+  </section>
+</div>
+</div>
+
+<script>
+const DATA={matches:[],bench:{},empties:[]};
+const TODAY=new Date().toLocaleDateString('sv-SE'), MAXD=33;
+const SC=['var(--s1)','var(--s2)','var(--s3)','var(--s4)','var(--s5)','var(--s6)'];
+const $=id=>document.getElementById(id);
+const ru=new Intl.NumberFormat('ru-RU');
+const fmtDate=s=>s.slice(8)+'.'+s.slice(5,7)+'.'+s.slice(0,4);
+const fmtDateS=s=>s.slice(8)+'.'+s.slice(5,7)+'.'+s.slice(2,4);
+function money(v){return v>=1e6?(v/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн ₽':ru.format(Math.round(v))+' ₽'}
+function moneyShort(v){return v>=1e6?(v/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн':v>=1e3?Math.round(v/1e3)+' тыс':String(Math.round(v))}
+const SHEET_ID='19TMgBLN4_so28Crf9QbJs3zGsBG6tiBYTlCA0bDsV14', RANGE="'Матчи по дням'!A1:ZZ45";
+const cumOf=a=>{const c=new Array(MAXD+2).fill(0);for(let n=MAXD;n>=0;n--)c[n]=c[n+1]+a[n];return c};
+const S={seasons:new Set(),cats:new Set(),status:'all',opp:'',metric:'q',view:'pct',win:33,cmp:[],sort:{k:'date',d:-1}};
+const cats=['ТОП','Обычный','ПО'];
+const CFG={CAPACITY:null}; // вместимость арены; когда появится число, включатся «заполнение» и план
+let ISS=[];
+let M=[],BENCH={},seasons=[],opps=[],cur=null;
+const NORM={'ПАРМА':'Парма','БЕТСИТИ-ПАРМА':'Парма','БЕСИТИ ПАРМА':'Парма','БЕТСИТИ ПАРМА':'Парма','ПАРИ НН':'Пари НН'};
+const TOPS=new Set(['Зенит','УНИКС','Локомотив-Кубань','Локомотив','Динамо']);
+function classify(raw){
+  const seen={};
+  return raw.matches.map(m=>{
+    const opp=NORM[m.opp.toUpperCase()]||NORM[m.opp]||m.opp, k=opp+'|'+m.date; seen[k]=(seen[k]||0)+1;
+    const D=m.date, po=/фина|плей|play/i.test(opp)||(D>='2025-04-23'&&D<='2025-06-30')||(D>='2026-04-27'&&D<='2026-06-30');
+    const y=+D.slice(0,4), mo=+D.slice(5,7), season=mo>=8?y+'–'+String(y+1).slice(2):(y-1)+'–'+String(y).slice(2);
+    return {opp,date:D,cat:po?'ПО':(TOPS.has(opp)?'ТОП':'Обычный'),season,dup:seen[k],days:m.days,totQ:m.totQ,totS:m.totS,bad:m.bad||[]};
+  });
+}
+function buildData(raw){
+  const prev=S.cmp.map(c=>({slug:M[c.id]&&M[c.id].slug,slot:c.slot}));
+  M=classify(raw).map((m,i)=>{
+    const q=new Array(MAXD+1).fill(0), r=new Array(MAXD+1).fill(0);
+    m.days.forEach(([n,a,b])=>{ if(n>=0&&n<=MAXD){q[n]+=a;r[n]+=b} });
+    const tq=q.reduce((a,b)=>a+b,0), tr=r.reduce((a,b)=>a+b,0);
+    return {id:i,opp:m.opp,date:m.date,cat:m.cat,season:m.season,
+      label:m.opp+' '+fmtDateS(m.date)+(m.dup>1?' (игра '+m.dup+')':''),
+      lastN:m.days.length?Math.min(...m.days.map(d=>d[0])):0,
+      firstN:m.days.length?Math.max(...m.days.map(d=>d[0])):0,
+      dup:m.dup, slug:'match-'+m.date+(m.dup>1?'-'+m.dup:''),
+      have:new Set(m.days.map(d=>d[0])), totQ:m.totQ,totS:m.totS,bad:m.bad,
+      up:m.date>TODAY, q,r,tq,tr, price:tq?tr/tq:0, last3:tq?(q[0]+q[1]+q[2])/tq:0};
+  });
+  M.forEach(m=>{m.cq=cumOf(m.q);m.cr=cumOf(m.r)});
+  BENCH={};
+  Object.entries(raw.bench||{}).forEach(([k,o])=>{const a=new Array(MAXD+1).fill(0);Object.entries(o).forEach(([n,v])=>{if(+n<=MAXD)a[+n]=v});
+    const c=cumOf(a), t=c[0]||1; BENCH[k]=c.slice(0,MAXD+1).map(v=>v/t)});
+  S.cmp=prev.map(p=>{const m=M.find(x=>x.slug===p.slug);return m?{id:m.id,slot:p.slot}:null}).filter(Boolean);
+  seasons=[...new Set(M.map(m=>m.season))].sort();
+  opps=[...new Set(M.map(m=>m.opp))].sort((a,b)=>a.localeCompare(b,'ru'));
+  [...S.seasons].forEach(s=>{if(!seasons.includes(s))S.seasons.delete(s)});
+  if(S.opp&&!opps.includes(S.opp))S.opp='';
+  $('asof').textContent=M.length+' матчей · '+seasons.length+' '+(seasons.length>4?'сезонов':'сезона');
+  $('fSeason').innerHTML=seasons.map(s=>`<button class="chip" data-s="${s}" aria-pressed="false">${s}</button>`).join('');
+  $('fCat').innerHTML=cats.map(s=>`<button class="chip" data-c="${s}" aria-pressed="false">${s}</button>`).join('');
+  $('fOpp').innerHTML='<option value="">Все</option>'+opps.map(o=>`<option>${o}</option>`).join('');
+  $('fOpp').value=S.opp;
+  ISS=[];
+  M.forEach(m=>{
+    if(m.totQ!=null){const d=m.tq-m.totQ; if(Math.abs(d)>=Math.max(20,.03*m.totQ))ISS.push({m,hi:Math.abs(d)>=.1*m.totQ,t:'Сумма по дням не совпадает со строкой «Всего»',d:`по дням ${ru.format(m.tq)} бил., в «Всего» ${ru.format(m.totQ)} (разница ${ru.format(Math.abs(d))})`})}
+    if(m.bad&&m.bad.length){const b=m.bad[0];ISS.push({m,hi:true,t:`Дата в строке не совпадает с днём до матча (${m.bad.length} стр.)`,d:`например, на месте «${b[0]} дн. до матча» (${fmtDate(b[2])}) записано ${fmtDate(b[1])}`})}
+  });
+  (raw.empties||[]).forEach(e=>{if(e.date<TODAY)ISS.push({e,hi:false,t:'Для прошедшего матча нет данных продаж',d:e.opp+' '+fmtDate(e.date)})});
+  $('dJump').innerHTML=[...M].reverse().map(m=>`<option value="${m.slug}">${m.label}</option>`).join('');
+}
+
+function toggle(set,v){set.has(v)?set.delete(v):set.add(v)}
+$('fSeason').onclick=e=>{const b=e.target.closest('[data-s]');if(b){toggle(S.seasons,b.dataset.s);render()}};
+$('fCat').onclick=e=>{const b=e.target.closest('[data-c]');if(b){toggle(S.cats,b.dataset.c);render()}};
+$('fStatus').onchange=e=>{S.status=e.target.value;render()};
+$('fOpp').onchange=e=>{S.opp=e.target.value;render()};
+$('fWin').onchange=e=>{S.win=+e.target.value;render()};
+$('fMetric').onclick=e=>{const b=e.target.closest('button');if(b){S.metric=b.dataset.v;render()}};
+$('fView').onclick=e=>{const b=e.target.closest('button');if(b){S.view=b.dataset.v;render()}};
+$('reset').onclick=()=>{S.seasons.clear();S.cats.clear();S.status='all';S.opp='';S.win=33;S.cmp=[];$('fStatus').value='all';$('fOpp').value='';$('fWin').value='33';render()};
+
+const slotOf=id=>{const c=S.cmp.find(x=>x.id===id);return c?c.slot:-1};
+function toggleCmp(id){
+  const i=S.cmp.findIndex(x=>x.id===id);
+  if(i>=0){S.cmp.splice(i,1)}
+  else if(S.cmp.length<6){const used=new Set(S.cmp.map(x=>x.slot));let s=0;while(used.has(s))s++;S.cmp.push({id,slot:s})}
+  render();
+}
+
+function filtered(){
+  return M.filter(m=>(!S.seasons.size||S.seasons.has(m.season))&&(!S.cats.size||S.cats.has(m.cat))
+   &&(S.status==='all'||(S.status==='up')===m.up)&&(!S.opp||m.opp===S.opp));
+}
+
+function niceMax(v){if(v<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(v)));for(const k of [1,1.5,2,2.5,3,4,5,6,8,10]) if(k*p>=v) return k*p;return 10*p}
+function svgEl(w,h,inner){return `<svg viewBox="0 0 ${w} ${h}" role="img" width="${w}" height="${h}">${inner}</svg>`}
+const dayLabel=n=>n===0?'день матча':n+' '+(n%10===1&&n!==11?'день':(n%10>=2&&n%10<=4&&(n<10||n>20)?'дня':'дней'))+' до матча';
+
+function drawLines(host,tip,series,o){
+  const W=Math.max(300,host.clientWidth), H=W<520?260:320, ml=W<520?42:52, mr=14, mt=10, mb=30, iw=W-ml-mr, ih=H-mt-mb, win=o.win;
+  const x=n=>ml+(win-n)/win*iw, y=v=>mt+ih-(v/o.ymax)*ih;
+  let g='';
+  const ticks=5; for(let i=0;i<=ticks;i++){const v=o.ymax*i/ticks,yy=y(v);
+    g+=`<line x1="${ml}" x2="${W-mr}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/><text x="${ml-8}" y="${yy+4}" text-anchor="end">${o.yfmt(v)}</text>`}
+  const xt=[33,28,21,14,10,7,5,3,2,1,0].filter(n=>n<=win);
+  const step=win>=28?7:win>=14?2:1;
+  const xs=[];for(let n=win;n>=0;n-=step)xs.push(n); if(xs[xs.length-1]!==0)xs.push(0);
+  xs.forEach(n=>{g+=`<text x="${x(n)}" y="${H-8}" text-anchor="${n===win?'start':n===0?'end':'middle'}">${n===0?'матч':n}</text>`});
+  let paths='';
+  series.forEach(s=>{
+    let d='';for(let n=win;n>=0;n--){const v=s.vals[n];if(v==null)continue;d+=(d?'L':'M')+x(n).toFixed(1)+' '+y(v).toFixed(1)}
+    paths+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.w}" ${s.dash?`stroke-dasharray="${s.dash}"`:''} opacity="${s.op||1}" stroke-linejoin="round" stroke-linecap="round"/>`});
+  host.querySelector('svg')?.remove();
+  host.insertAdjacentHTML('afterbegin',svgEl(W,H,`<g class="axis">${g}</g>${paths}<g id="hv"></g><rect id="ov" x="${ml}" y="${mt}" width="${iw}" height="${ih}" fill="transparent"/>`));
+  const ov=host.querySelector('#ov'),hv=host.querySelector('#hv');
+  const move=ev=>{
+    const rc=ov.getBoundingClientRect(), px=(ev.clientX-rc.left)/rc.width;
+    const n=Math.max(0,Math.min(win,Math.round(win-px*win)));
+    let h=`<line x1="${x(n)}" x2="${x(n)}" y1="${mt}" y2="${mt+ih}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+    let rows='';
+    series.filter(s=>s.tip&&s.vals[n]!=null).forEach(s=>{
+      h+=`<circle cx="${x(n)}" cy="${y(s.vals[n])}" r="4" fill="${s.color}" stroke="var(--surface)" stroke-width="2"/>`;
+      rows+=`<div><span><i style="background:${s.color}"></i>${s.name}</span><span>${o.vfmt(s.vals[n])}</span></div>`});
+    hv.innerHTML=h; tip.innerHTML=`<b>${dayLabel(n)}</b>${rows||'<div>нет данных</div>'}`; tip.style.display='block';
+    const tw=tip.offsetWidth, left=x(n)+14+tw>W?x(n)-14-tw:x(n)+14; tip.style.left=Math.max(0,left)+'px'; tip.style.top=(mt+8)+'px';
+  };
+  ov.addEventListener('pointermove',move); ov.addEventListener('pointerdown',move);
+  ov.addEventListener('pointerleave',()=>{hv.innerHTML='';tip.style.display='none'});
+}
+
+function drawBars(host,tip,vals,o){
+  const W=Math.max(300,host.clientWidth), H=W<520?240:280, ml=W<520?42:52, mr=8, mt=10, mb=30, iw=W-ml-mr, ih=H-mt-mb, win=o.win, cnt=win+1;
+  const slot=iw/cnt, bw=Math.max(2,slot-(slot>8?4:2)), y=v=>mt+ih-(v/o.ymax)*ih;
+  let g='';for(let i=0;i<=4;i++){const v=o.ymax*i/4,yy=y(v);g+=`<line x1="${ml}" x2="${W-mr}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/><text x="${ml-8}" y="${yy+4}" text-anchor="end">${o.yfmt(v)}</text>`}
+  let bars='',lab='';
+  const step=win>=28?4:win>=14?2:1;
+  for(let n=win;n>=0;n--){const i=win-n,cx=ml+i*slot+slot/2,v=vals[n]||0,h=ih-(y(v)-mt);
+    bars+=`<rect data-n="${n}" x="${cx-bw/2}" y="${y(v)}" width="${bw}" height="${Math.max(0,h)}" rx="${Math.min(3,bw/2)}" fill="${n<=2?'var(--accent)':'var(--faint)'}"/>`;
+    if(n%step===0||n===0)lab+=`<text x="${cx}" y="${H-8}" text-anchor="middle">${n===0?'матч':n}</text>`}
+  host.querySelector('svg')?.remove();
+  host.insertAdjacentHTML('afterbegin',svgEl(W,H,`<g class="axis">${g}${lab}</g>${bars}<g id="hv2"></g><rect id="ov2" x="${ml}" y="${mt}" width="${iw}" height="${ih+mb-8}" fill="transparent"/>`));
+  const ov=host.querySelector('#ov2'),hv=host.querySelector('#hv2');
+  const move=ev=>{const rc=ov.getBoundingClientRect(),i=Math.max(0,Math.min(win,Math.floor((ev.clientX-rc.left)/rc.width*cnt))),n=win-i,cx=ml+i*slot+slot/2;
+    hv.innerHTML=`<rect x="${cx-slot/2}" y="${mt}" width="${slot}" height="${ih}" fill="var(--accent)" opacity=".12"/>`;
+    tip.innerHTML=`<b>${dayLabel(n)}${o.dateOf?' · '+o.dateOf(n):''}</b><div><span>${o.name}</span><span>${o.vfmt(vals[n]||0)}</span></div>`;tip.style.display='block';
+    const tw=tip.offsetWidth,left=cx+14+tw>W?cx-14-tw:cx+14;tip.style.left=Math.max(0,left)+'px';tip.style.top=(mt+8)+'px'};
+  ov.addEventListener('pointermove',move);ov.addEventListener('pointerdown',move);
+  ov.addEventListener('pointerleave',()=>{hv.innerHTML='';tip.style.display='none'});
+}
+
+function render(){
+  document.querySelectorAll('#fSeason .chip').forEach(b=>b.setAttribute('aria-pressed',S.seasons.has(b.dataset.s)));
+  document.querySelectorAll('#fCat .chip').forEach(b=>b.setAttribute('aria-pressed',S.cats.has(b.dataset.c)));
+  document.querySelectorAll('#fMetric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.metric));
+  document.querySelectorAll('#fView button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.view));
+  const F=filtered(), done=F.filter(m=>!m.up), mq=S.metric==='q', key=mq?'q':'r', ckey=mq?'cq':'cr';
+  const vf=v=>mq?ru.format(Math.round(v)):money(v), yf=v=>mq?ru.format(Math.round(v)):moneyShort(v);
+
+  // KPIs
+  const sq=F.reduce((a,m)=>a+m.tq,0), sr=F.reduce((a,m)=>a+m.tr,0);
+  const dq=done.reduce((a,m)=>a+m.tq,0), l3=done.reduce((a,m)=>a+m.q[0]+m.q[1]+m.q[2],0);
+  const upN=F.length-done.length;
+  $('kpis').innerHTML=[
+    ['Матчей',ru.format(F.length),upN?`из них ${upN} предстоящих`:'все сыграны'],
+    ['Билетов',ru.format(sq),F.length?`в среднем ${ru.format(Math.round(sq/F.length))} на матч`:''],
+    ['Выручка',money(sr),F.length?`в среднем ${money(sr/F.length)} на матч`:''],
+    ['Средняя цена',sq?ru.format(Math.round(sr/sq))+' ₽':'—','выручка / билеты'],
+    ['Последние 3 дня',dq?Math.round(l3/dq*100)+'%':'—','доля билетов, сыгранные матчи']
+  ].map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="n">${k[2]}</div></div>`).join('');
+
+  // chart 1
+  const pct=S.view==='pct', win=S.win;
+  const cmpM=S.cmp.map(c=>({m:M[c.id],slot:c.slot})).filter(c=>!pct||!c.m.up);
+  const pool=pct?done:F;
+  const empty=!F.length;
+  $('p1').style.display=$('p2').style.display=empty?'none':'block';
+  if(empty){
+    $('lg1').innerHTML='<div class="empty" style="width:100%">Нет матчей под выбранные фильтры. Снимите часть фильтров или нажмите «Сбросить».</div>';
+    $('n1').textContent='';$('n2').textContent='';
+  }else{
+    const series=[];
+    pool.forEach(m=>{const vals=[];for(let n=0;n<=MAXD;n++)vals[n]=pct?(m.tq?m[ckey][n]/ (m[ckey][0]||1):0):m[ckey][n];
+      series.push({name:m.label,color:'var(--faint)',w:1,op:.45,vals,tip:false})});
+    const bk=S.cats.size===1?[...S.cats][0]:'Средний';
+    if(pct&&BENCH[bk])series.push({name:'Эталон «'+bk+'»',color:'var(--muted)',w:2,dash:'5 4',vals:BENCH[bk],tip:true});
+    if(pool.length){const vals=[];for(let n=0;n<=MAXD;n++){let s=0;pool.forEach(m=>{s+=pct?(m[ckey][n]/(m[ckey][0]||1)):m[ckey][n]});vals[n]=s/pool.length}
+      series.push({name:pct?'Среднее по выбранным':'Среднее по выбранным',color:'var(--ink)',w:3,vals,tip:true})}
+    cmpM.forEach(c=>{const m=c.m,vals=[];for(let n=0;n<=MAXD;n++)vals[n]=pct?(m[ckey][n]/(m[ckey][0]||1)):m[ckey][n];
+      series.push({name:m.label,color:SC[c.slot],w:2.5,vals,tip:true})});
+    let ymax=1;
+    if(!pct){ymax=niceMax(Math.max(1,...pool.map(m=>m[ckey][Math.min(win,MAXD)]*0+m[ckey][0]),...cmpM.map(c=>c.m[ckey][0])))}
+    drawLines($('p1'),$('t1'),series,{win,ymax,yfmt:pct?(v=>Math.round(v*100)+'%'):yf,vfmt:pct?(v=>(v*100).toFixed(1).replace('.',',')+'%'):vf});
+    $('n1').textContent=pct?`Какая доля итоговых ${mq?'билетов':'продаж'} набрана к каждому дню до матча. Учтены сыгранные матчи (${done.length}).`:`Сколько ${mq?'билетов':'рублей'} продано к каждому дню до матча, включая предстоящие матчи.`;
+    $('lg1').innerHTML=`<span class="it"><span class="sw" style="border-color:var(--faint)"></span>каждый матч</span><span class="it"><span class="sw" style="border-color:var(--ink);border-top-width:3px"></span>среднее</span>`
+      +(pct?`<span class="it"><span class="sw" style="border-top-style:dashed;border-color:var(--muted)"></span>эталон «${bk}»</span>`:'')
+      +cmpM.map(c=>`<span class="it"><span class="sw" style="border-color:${SC[c.slot]};border-top-width:3px"></span>${c.m.label}<button class="x" data-rm="${c.m.id}" aria-label="Убрать ${c.m.label} из сравнения">×</button></span>`).join('')
+      +(S.cmp.length&&!cmpM.length?'<span class="cmpmsg">Выбранные матчи предстоящие, в процентах они не показаны.</span>':'')
+      +(!S.cmp.length?'<span class="cmpmsg">Добавьте матчи для сравнения кликом по строке в таблице.</span>':'');
+
+    // chart 2: average per day
+    const src=done.length?done:F, avg=[];
+    for(let n=0;n<=MAXD;n++)avg[n]=src.reduce((a,m)=>a+m[key][n],0)/src.length;
+    const ym2=niceMax(Math.max(...avg.slice(0,win+1),1));
+    drawBars($('p2'),$('t2'),avg,{win,ymax:ym2,yfmt:yf,vfmt:vf,name:mq?'Билетов в среднем':'Выручка в среднем'});
+    $('n2').textContent=`Среднее за день на один матч (${src.length} ${done.length?'сыгранных':''}). Синим выделены последние три дня до матча.`.replace('  ',' ');
+  }
+
+  renderToday();
+  renderChecks();
+  renderForecast(F);
+  // table
+  const cols=[['label','Матч'],['date','Дата'],['cat','Категория'],['tq','Билетов'],['tr','Выручка'],['price','Ср. цена'],['last3','Посл. 3 дня']];
+  $('tbl').tHead.innerHTML='<tr>'+cols.map(c=>`<th><button data-k="${c[0]}" data-on="${S.sort.k===c[0]?1:0}">${c[1]}${S.sort.k===c[0]?(S.sort.d>0?' ↑':' ↓'):''}</button></th>`).join('')+'<th>Страница</th></tr>';
+  const rows=[...F].sort((a,b)=>{const k=S.sort.k,A=a[k],B=b[k];return (typeof A==='string'?A.localeCompare(B,'ru'):A-B)*S.sort.d});
+  const mx=Math.max(1,...rows.map(m=>m[mq?'tq':'tr']));
+  $('tbl').tBodies[0].innerHTML=rows.map(m=>{const sl=slotOf(m.id);
+    return `<tr data-id="${m.id}" class="${sl>=0?'sel':''}" tabindex="0" aria-pressed="${sl>=0}"><td><span class="dot" style="${sl>=0?`background:${SC[sl]};border-color:${SC[sl]}`:''}"></span>${m.label}${m.up?' <span class="tag up">предстоит</span>':''}</td>
+    <td>${fmtDate(m.date)}</td><td><span class="tag">${m.cat}</span></td>
+    <td>${mq?`<span class="mbar" style="width:${Math.round(m.tq/mx*70)}px"></span>`:''}${ru.format(m.tq)}</td>
+    <td>${!mq?`<span class="mbar" style="width:${Math.round(m.tr/mx*70)}px"></span>`:''}${money(m.tr)}</td>
+    <td>${ru.format(Math.round(m.price))} ₽</td><td>${m.up?'—':Math.round(m.last3*100)+'%'}</td><td><a href="#${m.slug}">Открыть</a></td></tr>`}).join('');
+}
+function renderToday(){
+  const sale=M.filter(m=>m.date>=TODAY&&m.tq>0).sort((a,b)=>a.date.localeCompare(b.date));
+  $('todayCard').hidden=!sale.length; if(!sale.length)return;
+  const nOf=(m,d)=>Math.round((new Date(m.date)-new Date(d))/864e5);
+  const yest=dateMinus(TODAY,1); let ref=yest;
+  if(!sale.some(m=>m.have.has(nOf(m,ref)))){let best=null;sale.forEach(m=>{const d=dateMinus(m.date,m.lastN);if(!best||d>best)best=d});ref=best}
+  const val=(m,k,off)=>{const n=nOf(m,ref)+(off||0);return m.have.has(n)?m[k][n]:null};
+  let tq=0,tr=0;sale.forEach(m=>{tq+=val(m,'q')||0;tr+=val(m,'r')||0});
+  $('todayNote').textContent=(ref===yest?`Продажи за вчера, ${fmtDate(ref)}, по матчам, на которые билеты ещё продаются.`:`В таблице пока нет данных за вчера (${fmtDate(yest)}). Показан последний день с данными, ${fmtDate(ref)}.`)+' «Темп к норме» сравнивает продано на сегодня с медианой сыгранных матчей той же категории к этому же дню до матча.';
+  const upd=ref===yest?'вчера':'за '+fmtDate(ref);
+  $('todayKpis').innerHTML=[['Матчей в продаже',String(sale.length),'ближайший '+fmtDate(sale[0].date)],
+    ['Продано '+upd,ru.format(tq),'билетов'],['Выручка '+upd,money(tr),tq?'средняя цена '+ru.format(Math.round(tr/tq))+' ₽':'']]
+    .map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="n">${k[2]}</div></div>`).join('');
+  $('todayTbl').tHead.innerHTML='<tr><th>Матч</th><th>Дата</th><th>До матча</th><th>Продано '+upd+'</th><th>Выручка '+upd+'</th><th>Днём ранее</th><th>Всего продано</th><th>Темп к норме</th></tr>';
+  $('todayTbl').tBodies[0].innerHTML=sale.map(m=>{const q=val(m,'q'),r=val(m,'r'),p=val(m,'q',1),left=Math.round((new Date(m.date)-new Date(TODAY))/864e5);
+    return `<tr><td><a href="#${m.slug}">${m.label}</a></td><td>${fmtDate(m.date)}</td><td>${left>0?left+' дн.':'сегодня'}</td>
+    <td><b>${q==null?'—':ru.format(q)}</b></td><td>${r==null?'—':money(r)}</td><td>${p==null?'—':ru.format(p)}</td><td>${ru.format(m.tq)} · ${money(m.tr)}</td><td>${paceCell(m)}</td></tr>`}).join('');
+}
+
+function renderChecks(){
+  $('chkSum').textContent='Проверка данных: '+(ISS.length?`замечаний ${ISS.length}`:'замечаний нет');
+  $('chkNote').textContent=ISS.length?'Это места в таблице, которые стоит проверить. Расчёты дашборда идут по строкам с днями, поэтому такие расхождения искажают итоги.':'Даты строк и итоги блоков сходятся.';
+  $('chkTbl').tHead.innerHTML=ISS.length?'<tr><th>Матч</th><th>Что не так</th><th>Подробности</th></tr>':'';
+  $('chkTbl').tBodies[0].innerHTML=ISS.slice().sort((a,b)=>(b.hi-a.hi)||String((b.m||b.e).date).localeCompare(String((a.m||a.e).date))).map(x=>{
+    const nm=x.m?`<a href="#${x.m.slug}">${x.m.label}</a>`:x.e.opp+' '+fmtDate(x.e.date);
+    return `<tr><td style="white-space:nowrap">${nm}</td><td class="wrap"><span class="sev ${x.hi?'hi':''}">${x.hi?'важно':'проверить'}</span> ${x.t}</td><td class="wrap">${x.d}</td></tr>`}).join('');
+}
+function pace(m){
+  const n0=m.lastN; if(n0>=28)return null;
+  const refs=M.filter(x=>!x.up&&x.cat===m.cat&&x.tq>0&&x.q.slice(14).some(v=>v>0)).map(x=>x.cq[n0]).filter(v=>v>0);
+  if(refs.length<3||!m.cq[n0])return null;
+  const med=pctl(refs,.5);return {ratio:m.cq[n0]/med,med,n:refs.length};
+}
+function paceCell(m){
+  const p=pace(m); if(!p)return '<span class="note">слишком рано</span>';
+  const d=Math.round((p.ratio-1)*100), tip=`Медиана сыгранных матчей категории «${m.cat}» к этому же дню: ${ru.format(Math.round(p.med))} бил. (по ${p.n} матчам)`;
+  if(d>=10)return `<span class="good" title="${tip}">▲ +${d}%</span>`;
+  if(d<=-10)return `<span class="bad" title="${tip}">▼ −${Math.abs(d)}%</span>`;
+  return `<span title="${tip}">● в норме (${d>0?'+':d<0?'−':''}${Math.abs(d)}%)</span>`;
+}
+function stateHex(){
+  const o={s:[...S.seasons],c:[...S.cats],st:S.status,o:S.opp,m:S.metric,v:S.view,w:S.win,k:S.cmp.map(c=>M[c.id]&&M[c.id].slug).filter(Boolean)};
+  return [...new TextEncoder().encode(JSON.stringify(o))].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function applyHex(h){
+  try{
+    const o=JSON.parse(new TextDecoder().decode(new Uint8Array(h.match(/../g).map(x=>parseInt(x,16)))));
+    S.seasons=new Set((o.s||[]).filter(x=>seasons.includes(x)));S.cats=new Set((o.c||[]).filter(x=>cats.includes(x)));
+    S.status=['all','done','up'].includes(o.st)?o.st:'all';S.opp=opps.includes(o.o)?o.o:'';
+    S.metric=o.m==='r'?'r':'q';S.view=o.v==='abs'?'abs':'pct';S.win=[33,14,7,3].includes(o.w)?o.w:33;
+    let sl=0;S.cmp=(o.k||[]).slice(0,6).map(sg=>M.find(x=>x.slug===sg)).filter(Boolean).map(m=>({id:m.id,slot:sl++}));
+    $('fStatus').value=S.status;$('fOpp').value=S.opp;$('fWin').value=String(S.win);
+  }catch(e){}
+}
+function csvDownload(name,rows){
+  const t='﻿'+rows.map(r=>r.map(v=>{v=String(v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(';')).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+}
+const dec=v=>String(Math.round(v*100)/100).replace('.',',');
+$('csvM').onclick=()=>csvDownload('cska_matches.csv',[['Матч','Дата','Сезон','Категория','Статус','Билетов','Выручка, ₽','Средняя цена, ₽','Доля последних 3 дней']].concat(
+  filtered().map(m=>[m.label,fmtDate(m.date),m.season,m.cat,m.up?'предстоит':'сыгран',m.tq,dec(m.tr),Math.round(m.price),m.up?'':dec(m.last3*100)+'%'])));
+$('csvD').onclick=()=>{const rows=[['Матч','Дата матча','Дата продажи','Дней до матча','Билетов','Выручка, ₽']];
+  filtered().forEach(m=>{for(let n=m.firstN;n>=0;n--)if(m.have.has(n))rows.push([m.label,fmtDate(m.date),fmtDate(dateMinus(m.date,n)),n,m.q[n],dec(m.r[n])])});
+  csvDownload('cska_by_day.csv',rows)};
+$('shareBtn').onclick=async()=>{
+  const url=location.href.split('#')[0]+'#v-'+stateHex();
+  try{await navigator.clipboard.writeText(url);$('shareBtn').textContent='Ссылка скопирована'}
+  catch(e){location.hash='v-'+stateHex();$('shareBtn').textContent='Ссылка в адресной строке'}
+  setTimeout(()=>{$('shareBtn').textContent='Ссылка на этот вид'},2200);
+};
+document.querySelectorAll('.dl,#shareBtn').forEach(b=>{b.parentNode.parentNode.hidden=true});
+function pctl(a,p){const s=[...a].sort((x,y)=>x-y),i=(s.length-1)*p,lo=Math.floor(i),hi=Math.ceil(i);return s[lo]+(s[hi]-s[lo])*(i-lo)}
+function forecast(m){
+  const n0=m.lastN, now=m.cq[n0]||0, nowR=m.cr[n0]||0;
+  // reference: сыгранные матчи той же категории с продажами, открытыми заранее
+  const refs=M.filter(x=>!x.up&&x.cat===m.cat&&x.tq>0&&x.cq[Math.max(n0,1)]>=0&&x.q.slice(14).some(v=>v>0));
+  const sh=refs.map(x=>x.cq[n0]/x.cq[0]).filter(v=>v>0);
+  if(!sh.length||!now)return null;
+  const p25=pctl(sh,.25),p50=pctl(sh,.5),p75=pctl(sh,.75), price=nowR/now;
+  return {n0,now,nowR,refs:sh.length,share:p50,low:now/p75,mid:now/p50,high:now/p25,price,
+    rel:p50>=.3?'высокая':p50>=.1?'средняя':'низкая'};
+}
+function renderForecast(F){
+  const up=F.filter(m=>m.up).sort((a,b)=>a.date.localeCompare(b.date));
+  $('fcCard').style.display=up.length?'block':'none';
+  if(!up.length)return;
+  $('n3').textContent='Прогноз по тому, как набирали продажи сыгранные матчи той же категории: сколько билетов было продано к этому же дню и чем закончилось. Диапазон показывает разброс между матчами.';
+  $('fc').tHead.innerHTML='<tr><th>Матч</th><th>Дата</th><th>До матча</th><th>Продано сейчас</th><th>Прогноз билетов</th><th>Прогноз выручки</th>'+(CFG.CAPACITY?'<th>Заполнение</th>':'')+'<th>Надёжность</th></tr>';
+  $('fc').tBodies[0].innerHTML=up.map(m=>{
+    const f=forecast(m), left=Math.round((new Date(m.date)-new Date(TODAY))/864e5);
+    if(!f)return `<tr><td><a href="#${m.slug}">${m.label}</a></td><td>${fmtDate(m.date)}</td><td>${left} дн.</td><td>—</td><td colspan="3">недостаточно данных</td></tr>`;
+    const r=x=>ru.format(Math.round(x/10)*10);
+    return `<tr><td><a href="#${m.slug}">${m.label}</a></td><td>${fmtDate(m.date)}</td><td>${left} дн.</td>
+      <td>${ru.format(f.now)} · ${money(f.nowR)}</td>
+      <td>${f.rel==='низкая'?'<span class="note">слишком рано для оценки</span>':`<b>${r(f.mid)}</b> <span class="note">(${r(f.low)}–${r(f.high)})</span>`}</td>
+      <td>${f.rel==='низкая'?'—':`<b>${money(f.mid*f.price)}</b>`}</td>${CFG.CAPACITY?`<td>${f.rel==='низкая'?'—':Math.round(f.mid/CFG.CAPACITY*100)+'%'}</td>`:''}
+      <td><span class="tag ${f.rel==='низкая'?'up':''}">${f.rel}</span> <span class="note">по ${f.refs} матчам</span></td></tr>`}).join('');
+}
+$('tbl').tHead.addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(!b)return;
+  S.sort=S.sort.k===b.dataset.k?{k:b.dataset.k,d:-S.sort.d}:{k:b.dataset.k,d:b.dataset.k==='label'||b.dataset.k==='cat'?1:-1};render()});
+$('tbl').tBodies[0].addEventListener('click',e=>{if(e.target.closest('a'))return;const r=e.target.closest('tr');if(r)toggleCmp(+r.dataset.id)});
+$('tbl').tBodies[0].addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const r=e.target.closest('tr');if(r){e.preventDefault();toggleCmp(+r.dataset.id)}}});
+$('lg1').addEventListener('click',e=>{const b=e.target.closest('[data-rm]');if(b)toggleCmp(+b.dataset.rm)});
+/* ---- страница матча ---- */
+const WD=['вс','пн','вт','ср','чт','пт','сб'];
+const dateMinus=(iso,n)=>{const [y,mo,d]=iso.split('-').map(Number);return new Date(Date.UTC(y,mo-1,d-n)).toISOString().slice(0,10)};
+const wdOf=iso=>{const [y,mo,d]=iso.split('-').map(Number);return WD[new Date(Date.UTC(y,mo-1,d)).getUTCDay()]};
+$('dJump').onchange=e=>{location.hash=e.target.value};
+$('dMetric').onclick=e=>{const b=e.target.closest('button');if(b){S.metric=b.dataset.v;renderDetail(cur)}};
+function renderDetail(m){
+  cur=m;const i=M.indexOf(m),prev=M[i-1],next=M[i+1],mq=S.metric==='q';
+  document.title=m.label+' · продажи по дням';
+  $('dJump').value=m.slug;
+  const nv=(a,el,t)=>{el.hidden=!a;if(a){el.href='#'+a.slug;el.textContent=t}};
+  nv(prev,$('dPrev'),'← '+(prev?prev.label:''));nv(next,$('dNext'),(next?next.label:'')+' →');
+  const left=Math.round((new Date(m.date)-new Date(TODAY))/864e5);
+  $('dEye').textContent='ПБК ЦСКА · '+m.season+' · '+m.cat;
+  $('dTitle').textContent='ЦСКА — '+m.opp;
+  $('dSub').textContent=fmtDate(m.date)+', '+wdOf(m.date)+(m.dup>1?' · игра '+m.dup:'')+' · '+(m.up?(left>0?`через ${left} дн.`:'сегодня'):'сыгран');
+  const vq=n=>m.q[n],vr=n=>m.r[n];
+  let best=0;for(let n=0;n<=MAXD;n++)if(m.q[n]>m.q[best])best=n;
+  let open=-1;for(let n=MAXD;n>=0;n--)if(m.q[n]>0||m.r[n]>0){open=n;break}
+  const k=[['Билетов',ru.format(m.tq),m.up?'на '+fmtDate(dateMinus(m.date,m.lastN)):'за всё время'],
+    ['Выручка',money(m.tr),''],
+    ['Средняя цена',m.tq?ru.format(Math.round(m.price))+' ₽':'—','выручка / билеты'],
+    ['Продажи с',open>=0?fmtDate(dateMinus(m.date,open)):'—',open>=0?open+' дн. до матча':''],
+    ['Лучший день',m.q[best]?ru.format(m.q[best])+' бил.':'—',m.q[best]?fmtDate(dateMinus(m.date,best))+', '+wdOf(dateMinus(m.date,best)):'']];
+  if(m.up){const f=forecast(m);k.push(['Прогноз',f&&f.rel!=='низкая'?'≈ '+ru.format(Math.round(f.mid/10)*10):'—',f&&f.rel!=='низкая'?'билетов, '+ru.format(Math.round(f.low/10)*10)+'–'+ru.format(Math.round(f.high/10)*10):'пока рано оценивать'])}
+  else k.push(['Последние 3 дня',m.tq?Math.round(m.last3*100)+'%':'—','доля билетов']);
+  $('dKpis').innerHTML=k.map(x=>`<div class="kpi"><div class="l">${x[0]}</div><div class="v">${x[1]}</div><div class="n">${x[2]}</div></div>`).join('');
+  const others=M.filter(x=>x.opp===m.opp&&x.id!==m.id&&!x.up).sort((a,b)=>b.date.localeCompare(a.date));
+  $('dYoY').hidden=!others.length;
+  if(others.length){
+    const n0=m.up?m.lastN:null;
+    $('dYNote').textContent=m.up?`Сколько билетов было продано к тому же дню до матча (${n0} дн.) и чем закончилось.`:'Итоги матчей с тем же соперником.';
+    $('dYTbl').tHead.innerHTML='<tr><th>Матч</th><th>Сезон</th>'+(m.up?`<th>Продано к тому же дню</th><th>Сейчас у этого матча</th>`:'')+'<th>Итого билетов</th><th>Выручка</th><th>Ср. цена</th></tr>';
+    $('dYTbl').tBodies[0].innerHTML=others.map(x=>`<tr><td><a href="#${x.slug}">${x.label}</a></td><td>${x.season}</td>`+(m.up?`<td>${ru.format(x.cq[n0])}</td><td>${ru.format(m.cq[n0])}</td>`:'')+`<td>${ru.format(x.tq)}</td><td>${money(x.tr)}</td><td>${ru.format(Math.round(x.price))} ₽</td></tr>`).join('');
+  }
+  document.querySelectorAll('#dMetric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.metric));
+  const key=mq?'q':'r',vals=m[key],win=Math.max(1,m.firstN);
+  const yf=v=>mq?ru.format(Math.round(v)):moneyShort(v), vf=v=>mq?ru.format(Math.round(v))+' бил.':money(v);
+  drawBars($('dPlot'),$('dTip'),vals,{win,ymax:niceMax(Math.max(...vals.slice(0,win+1),1)),yfmt:yf,vfmt:vf,name:mq?'Билетов':'Выручка',dateOf:n=>fmtDate(dateMinus(m.date,n))});
+  $('dNote').textContent='Слева начало продаж, справа день матча. Синим выделены три последних дня.';
+  $('dTbl').tHead.innerHTML='<tr><th>Дата</th><th>День</th><th>До матча</th><th>Билетов</th><th>Выручка</th><th>Ср. цена</th><th>Всего билетов</th><th>Доля итога</th></tr>';
+  let rows='';
+  for(let n=win;n>=0;n--){const d=dateMinus(m.date,n),fut=m.up&&d>TODAY,q=m.q[n],r=m.r[n];
+    rows+=`<tr class="${fut?'fut':n===best&&q?'best':''}"><td>${fmtDate(d)}</td><td>${wdOf(d)}</td><td>${n===0?'матч':n+' дн.'}</td>`+
+      (fut?'<td colspan="5">ещё не было</td>':`<td>${ru.format(q)}</td><td>${ru.format(Math.round(r))} ₽</td><td>${q?ru.format(Math.round(r/q))+' ₽':'—'}</td><td>${ru.format(m.cq[n])}</td><td>${m.tq?(m.cq[n]/m.tq*100).toFixed(1).replace('.',',')+'%':'—'}</td>`)+'</tr>'}
+  rows+=`<tr class="tot"><td colspan="3">Итого</td><td>${ru.format(m.tq)}</td><td>${ru.format(Math.round(m.tr))} ₽</td><td>${m.tq?ru.format(Math.round(m.price))+' ₽':'—'}</td><td></td><td></td></tr>`;
+  $('dTbl').tBodies[0].innerHTML=rows;
+}
+function route(keep){
+  const h=location.hash.slice(1),m=M.find(x=>x.slug===h);
+  if(/^v-[0-9a-f]+$/.test(h)&&!keep)applyHex(h.slice(2));
+  $('viewMain').hidden=!!m;$('viewDetail').hidden=!m;
+  if(m){renderDetail(m);if(!keep)scrollTo(0,0)}else{document.title='Продажи ЦСКА по дням до матча';render()}
+}
+addEventListener('hashchange',route);
+let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{$('viewDetail').hidden?render():renderDetail(cur)},120)});
+/* ---- разбор листа «Матчи по дням» ---- */
+function parseNum(s){ if(s==null) return NaN; s=String(s); if(!/\d/.test(s)) return NaN;
+  const pct=s.indexOf('%')>=0; const v=Number(s.replace(/[^0-9,\-]/g,'').replace(',','.')); return pct?v/100:v }
+function parseDateCell(s){ s=String(s||'').trim(); let m;
+  if((m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)))return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)))return m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');
+  if((m=s.match(/^\d{4}-\d{2}-\d{2}/)))return m[0];
+  return null }
+function isoMinus(iso,n){return new Date(Date.UTC(+iso.slice(0,4),+iso.slice(5,7)-1,+iso.slice(8,10)-n)).toISOString().slice(0,10)}
+function parseSheet(values){
+  const cell=(r,c)=>{const row=values[r];return row&&row[c]!=null?String(row[c]).trim():''};
+  const dayAt=r=>{const a=cell(r,0);return a==='Матч'?0:(/^\d+$/.test(a)?parseInt(a,10):null)};
+  const matches=[],empties=[];
+  const width=values.reduce((m,r)=>Math.max(m,r.length),0);
+  for(let c=0;c<width;c++){
+    for(let r=0;r<values.length;r++){
+      if(cell(r,c)!=='Дата') continue;
+      let title=null;
+      for(let k=1;k<=2&&r-k>=0;k++){const t=cell(r-k,c); if(/\d\d\.\d\d\.\d{4}/.test(t)){title=t;break}}
+      if(!title) continue;
+      const m=title.match(/(\d\d)\.(\d\d)\.(\d{4})/), date=m[3]+'-'+m[2]+'-'+m[1];
+      const opp=title.replace(/\s*\d\d\.\d\d\.\d{4}/,'').replace(/^\s*ЦСКА\s*-\s*/,'').trim();
+      const days=[],bad=[];
+      for(let rr=3;rr<=36;rr++){
+        if(rr<=r) continue;
+        const n=dayAt(rr); if(n==null) continue;
+        const qs=cell(rr,c+1), ss=cell(rr,c+2); if(qs===''||ss==='') continue;
+        const q=parseNum(qs), s=parseNum(ss);
+        if(Number.isFinite(q)&&Number.isFinite(s)){
+          days.push([n,Math.round(q),Math.round(s*100)/100]);
+          const dc=parseDateCell(cell(rr,c)), ex=isoMinus(date,n);
+          if(dc&&dc!==ex)bad.push([n,dc,ex]);
+        }
+      }
+      let totQ=null,totS=null;
+      for(let rr=35;rr<=40;rr++){
+        const lab=cell(rr,c), q=parseNum(cell(rr,c+1)), s=parseNum(cell(rr,c+2));
+        if(lab==='Всего'){totQ=Number.isFinite(q)?q:null;totS=Number.isFinite(s)?s:null}
+        else if(lab===''&&rr>=37&&totQ==null&&Number.isFinite(q)){totQ=q;totS=Number.isFinite(s)?s:null}
+      }
+      if(days.length) matches.push({opp,date,days,col:c,totQ,totS,bad});
+      else empties.push({opp,date});
+    }
+  }
+  matches.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.col-b.col);
+  const bench={};
+  const names=['Средний','ТОП','Обычный','ПО'];
+  (values[0]||[]).forEach((v,c)=>{const nm=String(v||'').trim(); if(!names.includes(nm)||bench[nm]) return;
+    bench[nm]={}; for(let rr=3;rr<=36;rr++){const n=dayAt(rr); if(n==null) continue; const x=parseNum(cell(rr,c)); if(Number.isFinite(x)) bench[nm][n]=x}});
+  return {matches,bench,empties};
+}
+
+/* ---- загрузка из Google Таблицы ---- */
+let src={mode:'load',note:'',at:0};
+function drawSrc(){
+  const t=src.at?new Date(src.at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'';
+  $('src').innerHTML=src.mode==='live'?`<span class="pt live"></span><span>Данные из Google Таблицы, обновлено в ${t}</span><button id="reload">Обновить</button>`
+    :src.mode==='err'?`<span class="pt"></span><span>${src.note}</span><button id="reload">Повторить</button>`
+    :'<span class="pt"></span><span>Загружаем данные из таблицы…</span>';
+  const b=$('reload'); if(b)b.onclick=()=>pull();
+}
+function pull(){
+  google.script.run.withSuccessHandler(v=>{
+    try{const raw=parseSheet(v);if(!raw.matches.length)throw new Error('format');buildData(raw);src={mode:'live',note:'',at:Date.now()};drawSrc();route(true)}
+    catch(e){if(src.mode!=='live'){src={mode:'err',note:'Таблица прочитана, но формат листа не распознан.',at:0};drawSrc()}}
+  }).withFailureHandler(()=>{
+    if(src.mode!=='live'){src={mode:'err',note:'Нет доступа к таблице или она недоступна. Попросите владельца дать вам доступ на чтение.',at:0};drawSrc()}
+  }).getValues();
+}
+function startLive(){drawSrc();pull();setInterval(pull,120000)}
+buildData(DATA);
+(function(){const pick=['Зенит 2025-11-23','УНИКС 2026-02-01'];
+  pick.forEach(p=>{const [o,d]=p.split(' ');const m=M.find(x=>x.opp===o&&x.date===d);if(m)toggleCmp(m.id)})})();
+route();drawSrc();startLive();
+</script>
